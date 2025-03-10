@@ -20,6 +20,13 @@
     (let [test-id (:id suite)] ;; Obtener el ID del test suite
       (if (string/blank? test-id) "UNNAMED" test-id)))) ;; Devolver "UNNAMED" si el ID está en blanco
 
+(defn sf-test-suite->pt-test-id [options suite]
+  ;; Special case for automatically detected BDD scenarios - will use outline ID instead of generated one
+  (if-let [scenario (:gherkin-scenario suite)]
+    (:id scenario) ;; Use the ID of the BDD scenario
+    (let [test-id (:id suite)] ;; Get the ID of the test suite
+      (if (string/blank? test-id) "UNNAMED" test-id)))) ;; Return "UNNAMED" if the ID is blank
+
 (defn sf-test-case->pt-step-description [options test-case]
   (let [step-name (eval-query test-case (:pt-test-step-description options))]
     (if (string/blank? step-name) "UNNAMED" step-name)))
