@@ -49,6 +49,10 @@
   (doall (for [test tests]
            {:name_exact (sf-test-suite->pt-test-name options test)})))
 
+(defn group-test-ids [tests options]
+  (doall (for [test tests]
+           {:id (Integer/parseInt (:id test))})))
+
 (defn ensure-custom-field-values [client [project-id display-action-logs] custom-fields]
   (doseq [[cf v] custom-fields
           :let [cf-id (some-> (last (re-find #"^---f-(\d+)$" (name cf)))

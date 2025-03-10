@@ -1,13 +1,13 @@
 (ns practitest-firecracker.parser.core
   (:require
-    [clojure.java.io :as io]
-    [clojure.string :as str]
-    [clojure.tools.logging :as log]
-    [clojure.xml :as xml]
-    [clojure.zip :as zip])
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.tools.logging :as log]
+   [clojure.xml :as xml]
+   [clojure.zip :as zip])
   (:import
-    (java.io ByteArrayInputStream)
-    (java.text NumberFormat)))
+   (java.io ByteArrayInputStream)
+   (java.text NumberFormat)))
 
 (defn round
   [x & {p :precision}]
@@ -24,7 +24,7 @@
 (defn has-nested-testsuite? [element]
   (some #(= :testsuite (:tag %)) (:content element)))
 
-(defn flatten-testsuite 
+(defn flatten-testsuite
   "xUnit sometimes has hierarchy of `testsuite` tags.
    This function will flatten the hierarchy, capturing the parent testsuite names.
    For example, if there is a testsuite A which has a child B, which has testcases,
@@ -42,7 +42,7 @@
               (recur (conj acc head) tail prefix)))
           (recur (conj acc head) tail prefix))))))
 
-(defn preprocess-xunit 
+(defn preprocess-xunit
   "Support for xUnit.
    Since xUnit does not have root testsuites tag, but does have hierarchy of testsuite tags (sometimes),
    Here we will wrap it in a fake testsuites tag.
@@ -71,9 +71,9 @@
 
 (defn zip-str [s]
   (zip/xml-zip
-    (normalize-attributes
-      (preprocess-xunit 
-        (xml/parse (ByteArrayInputStream. (.getBytes s "UTF-8")))))))
+   (normalize-attributes
+    (preprocess-xunit
+     (xml/parse (ByteArrayInputStream. (.getBytes s "UTF-8")))))))
 
 (defn filter-tags [tag-key xml-content]
   (let [filter-result (filter #(= (:tag %) tag-key) xml-content)]
@@ -167,24 +167,24 @@
          (map (fn [{:keys [status] :as bdd-test-case}]
                 ;; Merge other data (required for further processing)
                 (dissoc (merge
-                          case
-                          bdd-test-case
-                          {:failure-type status
-                           :has-failure? (some? status)})
+                         case
+                         bdd-test-case
+                         {:failure-type status
+                          :has-failure? (some? status)})
                         :system-message))))))
 
 (defn- parse-specflow-step [{:keys [attrs content]
                              :as step}]
   (let [failure (first (filter #(= :failure (:tag %)) content))]
     (cond->
-      {:text (:text attrs)
-       :status (:status attrs)}
+     {:text (:text attrs)
+      :status (:status attrs)}
 
       (some? failure)
       (assoc :failure-message (:message (:attrs failure))))))
 
 (defn- parse-specflow-parameter [{:keys [attrs]
-                                 :as parameter}]
+                                  :as parameter}]
   {:name (:name attrs)
    :value (:value attrs)})
 
@@ -197,6 +197,7 @@
         case-type      (filter #(contains? #{:error :failure :flake :skipped} (:tag %)) content)
         system-message (filter #(contains? #{:system-out :system-err} (:tag %)) content)
         attrs          (:attrs case)
+        id             (:id attrs)
         name           (if (:classname attrs) (:name attrs) (last (str/split (:name attrs) #">")))
 
         ;; Additional XML tags for specflow BDD output
@@ -205,24 +206,25 @@
         specflow-params (mapv-or-nil parse-specflow-parameter
                                      (:content (first (filter #(= :parameters (:tag %)) content))))]
     (assoc attrs
-      :time (str-to-number (:time attrs))
-      :full-class-name (:classname attrs)
-      :full-name (str (:classname attrs) "." (:name attrs))
-      :has-failure? (some? case-type)
-      :failure-message (if case-type (get-in (first case-type) [:attrs :message]) nil)
-      :failure-detail (if system-message (str (first (:content (first system-message))) (first (:content (first case-type)))) nil)
-      :class-name (when (:classname attrs) (last (str/split (:classname attrs) #"\.")))
-      :failure-type (if (and case-type (first case-type)) (:tag (first case-type)) nil)
+           :id id
+           :time (str-to-number (:time attrs))
+           :full-class-name (:classname attrs)
+           :full-name (str (:classname attrs) "." (:name attrs))
+           :has-failure? (some? case-type)
+           :failure-message (if case-type (get-in (first case-type) [:attrs :message]) nil)
+           :failure-detail (if system-message (str (first (:content (first system-message))) (first (:content (first case-type)))) nil)
+           :class-name (when (:classname attrs) (last (str/split (:classname attrs) #"\.")))
+           :failure-type (if (and case-type (first case-type)) (:tag (first case-type)) nil)
       ;; :case-type         case-type
       ;; :case-content      content
       ;; :name              name
-      :test-case-name name
-      :pt-test-step-name name
-      :system-message system-message
+           :test-case-name name
+           :pt-test-step-name name
+           :system-message system-message
 
       ;; Will be handled by consumers
-      :specflow-steps specflow-steps
-      :specflow-params specflow-params)))
+           :specflow-steps specflow-steps
+           :specflow-params specflow-params)))
 
 (defn group-by-classname [val]
   (last (str/split (:classname (:attrs val)) #"\.")))
@@ -266,33 +268,33 @@
       (->> data
            (group-by grouping-func)
            (map
-             (fn [[k vals]]
-               [k (into {:test-cases (map case-data vals)} (first (map :attrs vals)))]))
+            (fn [[k vals]]
+              [k (into {:test-cases (map case-data vals)} (first (map :attrs vals)))]))
            (into {}))
       (->> data
            (map-indexed
-             (fn [index val]
-               (let [case (case-data val)
-                     specflow-steps (:specflow-steps case)
-                     specflow-params (:specflow-params case)]
-                 {index (assoc (:attrs val)
-                          :test-cases (cond
+            (fn [index val]
+              (let [case (case-data val)
+                    specflow-steps (:specflow-steps case)
+                    specflow-params (:specflow-params case)]
+                {index (assoc (:attrs val)
+                              :test-cases (cond
                                         ;; We have some specflow tests steps detected in report XML - use them
-                                        (seq specflow-steps)
-                                        (map (partial specflow-step->pt-step case) specflow-steps)
+                                            (seq specflow-steps)
+                                            (map (partial specflow-step->pt-step case) specflow-steps)
 
                                         ;; Expand data for steps if BDD detection is enabled
-                                        (and detect-bdd-steps
-                                             (:system-message case))
-                                        (or (seq (parse-bdd-output case (first (:content (first (:system-message case))))))
+                                            (and detect-bdd-steps
+                                                 (:system-message case))
+                                            (or (seq (parse-bdd-output case (first (:content (first (:system-message case))))))
                                             ;; Fallback to usual case
+                                                (list case))
+
+                                            :else
                                             (list case))
 
-                                        :else
-                                        (list case))
-
-                          :parameters-map (when specflow-params
-                                            (into {} (map (juxt :name :value)) specflow-params)))})))
+                              :parameters-map (when specflow-params
+                                                (into {} (map (juxt :name :value)) specflow-params)))})))
            (into {})))))
 
 (defn- first-and-only-one
@@ -348,25 +350,25 @@
       (log/warn "Unable to detect BDD scenario for test" (:classname test) (:name test) " - will create FC test"))
 
     (assoc test
-      :bdd-test? (some? bdd-scenario)
-      :gherkin-scenario bdd-scenario
+           :bdd-test? (some? bdd-scenario)
+           :gherkin-scenario bdd-scenario
       ;; Extract scenario outline params to special arg (accessible via ?outline-params-row in firecracker config)
-      :outline-params-row (:row (:outline-params bdd-scenario))
-      :outline-params-map (:map (:outline-params bdd-scenario))
-      :errors (count (filter #(= (:failure-type %) :error) (:test-cases test)))
-      :failures (count (filter #(= (:failure-type %) :failure) (:test-cases test)))
-      :flakes (count (filter #(= (:failure-type %) :flake) (:test-cases test)))
-      :skipped (count (filter #(= (:failure-type %) :skipped) (:test-cases test)))
-      :tests (count (:test-cases test))
+           :outline-params-row (:row (:outline-params bdd-scenario))
+           :outline-params-map (:map (:outline-params bdd-scenario))
+           :errors (count (filter #(= (:failure-type %) :error) (:test-cases test)))
+           :failures (count (filter #(= (:failure-type %) :failure) (:test-cases test)))
+           :flakes (count (filter #(= (:failure-type %) :flake) (:test-cases test)))
+           :skipped (count (filter #(= (:failure-type %) :skipped) (:test-cases test)))
+           :tests (count (:test-cases test))
       ;; :name                  name
       ;; :name-test-suite       name
-      :suite-name (:suite-name test)
-      :pt-first-case-name (:name (first (:test-cases test)))
-      :pt-test-name name
-      :pt-name-combine (str name " - " (:name (first (:test-cases test))))
-      :time-elapsed (round (reduce + (map :time (:test-cases test))) :precision 3)
-      :full-class-name (:classname test)
-      :package-name package)))
+           :suite-name (:suite-name test)
+           :pt-first-case-name (:name (first (:test-cases test)))
+           :pt-test-name name
+           :pt-name-combine (str name " - " (:name (first (:test-cases test))))
+           :time-elapsed (round (reduce + (map :time (:test-cases test))) :precision 3)
+           :full-class-name (:classname test)
+           :package-name package)))
 
 (defn get-test-aggregations [test val {:keys [scenarios-map]
                                        :as options}]
@@ -382,12 +384,12 @@
   (let [content-data (if sample (keep-indexed #(if (> 20 %1) %2) (:content data)) (:content data))]
     (case (:tag data)
       :testsuite (assoc (get-attrs data) :test-list
-                                         (get-test-aggregations data
-                                                                (group-testcase-data (filter-tags :testcase content-data) options)
-                                                                options))
+                        (get-test-aggregations data
+                                               (group-testcase-data (filter-tags :testcase content-data) options)
+                                               options))
       :testsuites (assoc data :testsuite-list
-                              (for [suite content-data]
-                                (get-another-lvl-data options suite)))
+                         (for [suite content-data]
+                           (get-another-lvl-data options suite)))
       nil)))
 
 (defn clean-content [testsuite]
@@ -425,8 +427,7 @@
          :tests     (reduce + (map #(str-to-number %) (map :tests testsets)))
          :time      (reduce + (map #(str-to-number %) (map :time testsets)))
          :failures  (reduce + (map #(str-to-number %) (map :failues testsets)))
-         :skipped   (reduce + (map #(str-to-number %) (map :skipped testsets)))
-         }))
+         :skipped   (reduce + (map #(str-to-number %) (map :skipped testsets)))}))
 
 (defn merge-testsets [testsets testset-name]
   (let [group-tests (flatten (reduce conj (for [testset testsets] (:test-list testset))))]
@@ -464,10 +465,10 @@
 
 (defn send-directory [parsed-dirs options]
   (first
-    (conj (list)
-          (first
-            (for [dir parsed-dirs]
-              (merge-results dir options))))))
+   (conj (list)
+         (first
+          (for [dir parsed-dirs]
+            (merge-results dir options))))))
 
 (defn get-dir-by-path [path options]
   (let [directory   (clojure.java.io/file path)
@@ -487,17 +488,15 @@
 (comment
   (let [s (slurp "test-data/robot/RobotDemo/xunit-combinded.xml")]
     (zip/xml-zip
-      (preprocess-xunit
-        (xml/parse (ByteArrayInputStream. (.getBytes s "UTF-8"))))))
+     (preprocess-xunit
+      (xml/parse (ByteArrayInputStream. (.getBytes s "UTF-8"))))))
 
   (let [s (slurp "test-data/carmit/junit-report.xml")]
     (zip/xml-zip
-      (preprocess-xunit
-        (xml/parse (ByteArrayInputStream. (.getBytes s "UTF-8"))))))
+     (preprocess-xunit
+      (xml/parse (ByteArrayInputStream. (.getBytes s "UTF-8"))))))
 
   (let [s (slurp "test-data/pb/report.xml")]
     (normalize-attributes
-      (preprocess-xunit
-        (xml/parse (ByteArrayInputStream. (.getBytes s "UTF-8"))))))
-
-  )
+     (preprocess-xunit
+      (xml/parse (ByteArrayInputStream. (.getBytes s "UTF-8")))))))

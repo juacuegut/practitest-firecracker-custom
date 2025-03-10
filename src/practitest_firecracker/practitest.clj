@@ -94,16 +94,16 @@
    :attributes attributes})
 
 (defn create-or-update-tests [[all-tests org-xml-tests testset-id-to-name ts-id-test-name-num-instances] client {:keys [project-id display-action-logs display-run-time use-test-step] :as options} start-time]
-  (let [new-tests (into [] (eval/group-test-names (vals all-tests) options))
+  (let [new-tests (into [] (eval/group-test-ids (vals all-tests) options))
         results (doall
                   (flatten
                     (into []
                           (pmap
                             (fn [new-tests-part]
-                              (api/ll-find-tests client [project-id display-action-logs] new-tests-part)) (partition-all 20 new-tests)))))
+                              (api/ll-find-tests-by-id client [project-id display-action-logs] new-tests-part)) (partition-all 20 new-tests)))))
 
         xml-tests (doall (for [res results]
-                           [(:name_exact (:query res)) (get all-tests (:name_exact (:query res))) (first (:data (:tests res)))]))
+                           [(get-in res [:query :id]) (get all-tests (get-in res [:query :id])) (first (:data (:tests res)))]))
 
         test-ids (->> results
                       (map #(get-in % [:tests :data]))
@@ -123,15 +123,14 @@
                                (map (fn [[grp-key values]]
                                       {grp-key (map #(translate-step-attributes (:attributes %)) values)})
                                     (group-by (fn [x] (:test-id (:attributes x))) test-cases)))
-
         log (if display-run-time (print-run-time "Time - after find all tests: %d:%d:%d" start-time) nil)
         nil-tests (filter #(nil? (last %)) xml-tests)
         old-tests (filter #(not (nil? (last %))) xml-tests)
 
         tests-after (if (seq nil-tests)
                       ;; create missing tests and add them to the testset
-                      (let [new-tests (pmap (fn [[test-name test-suite _]]
-                                              [test-name test-suite (eval/create-sf-test client options test-suite)])
+                      (let [new-tests (pmap (fn [[test-id test-suite _]]
+                                              [test-id test-suite (eval/create-sf-test client options test-suite)])
                                             nil-tests)]
                         new-tests)
                       ())
@@ -145,8 +144,6 @@
                   old-tests))
       (when display-run-time (print-run-time "Time - after update tests: %d:%d:%d" start-time)))
     [new-all-tests org-xml-tests testset-id-to-name ts-id-test-name-num-instances test-id-to-cases tests-after]))
-
-
 
 ;; API returns mangled parameters because of rails key transformation, so for lookup purposes
 ;; we're trying to mimic what rails does to parameter keys
