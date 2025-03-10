@@ -157,13 +157,13 @@
                                                  :attributes (assoc (:attributes run) :instance-id (:instance-id run))
                                                  :steps      {:data (reduce conj [] (:steps run))}})))}}))))
 
-(defn ll-find-tests [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] name-list]
+(defn ll-find-tests [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] test-ids]
   (when display-action-logs (log/infof "searching for testsets"))
   (let [uri (build-uri base-uri bulk-list-tests-uri project-id)]
     (api-call {:credentials credentials
                :uri         uri
                :method      (max-api-rate-throttler http/post)
-               :form-params {:data name-list}})))
+               :form-params {:ids test-ids}})))
 
 (defn ll-find-test [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] name]
   (when display-action-logs (log/infof "searching for test %s" name))
