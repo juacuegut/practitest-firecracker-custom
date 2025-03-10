@@ -165,15 +165,15 @@
                :method      (max-api-rate-throttler http/post)
                :form-params {:data name-list}})))
 
-(defn ll-find-test [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] name]
-  (when display-action-logs (log/infof "searching for test %s" name))
+(defn ll-find-test [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] id]
+  (when display-action-logs (log/infof "searching for test ID:%s" id))
   (let [uri (build-uri base-uri list-tests-uri project-id)]
     ;; in case there are more than one test with this name, return the first one
     (first
       (api-call {:credentials  credentials
                  :uri          uri
                  :method       (max-api-rate-throttler http/get)
-                 :query-params {:name_exact name}}))))
+                 :query-params {:display-ids id}}))))
 
 (defn ll-find-testset [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] name]
   (when display-action-logs (log/infof "searching for testset %s" name))

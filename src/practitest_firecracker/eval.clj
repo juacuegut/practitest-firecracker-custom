@@ -70,7 +70,7 @@
 
 (defn create-sf-test [client {:keys [project-id display-action-logs] :as options} sf-test-suite]
   (let [[test-def step-defs] (sf-test-suite->test-def options sf-test-suite)
-        test (api/ll-find-test client [project-id display-action-logs] (:name test-def))
+        test (api/ll-find-test client [project-id display-action-logs] (:id test-def))
         additional-test-fields (eval-additional-fields sf-test-suite (:additional-test-fields options))
         additional-test-fields (merge additional-test-fields (:system-fields additional-test-fields))]
     (ensure-custom-field-values client [project-id display-action-logs] (:custom-fields additional-test-fields))
