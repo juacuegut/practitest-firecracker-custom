@@ -184,13 +184,14 @@
                  :method       (max-api-rate-throttler http/get)
                  :query-params {:name_exact name}}))))
 
-(defn ll-find-tests-by-id [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] id-list]
-  (when display-action-logs (log/infof "searching for tests by ids %s" id-list))
+(defn ll-find-tests-by-id [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] id-list] 
+  (when display-action-logs (log/infof "find tests by id"))
+  (when display-action-logs (log/infof "searching for tests by ids %s" (pr-str id-list)))
   (let [uri (build-uri base-uri bulk-list-tests-uri project-id)]
     (api-call {:credentials  credentials
                :uri          uri
                :method       (max-api-rate-throttler http/post)
-               :query-params {:ids id-list}})))
+               :form-params {:data id-list}})))
 
 (defn ll-get-custom-field [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] cf-id]
   (when display-action-logs (log/infof "searching custom field %s" cf-id))
