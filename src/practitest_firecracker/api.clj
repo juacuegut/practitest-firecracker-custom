@@ -158,7 +158,7 @@
                                                  :steps      {:data (reduce conj [] (:steps run))}})))}}))))
 
 (defn ll-find-tests [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] name-list]
-  (when display-action-logs (log/infof "searching for testsets"))
+  (when display-action-logs (log/infof "searching for testsets new loggin description"))
   (let [uri (build-uri base-uri bulk-list-tests-uri project-id)]
     (api-call {:credentials credentials
                :uri         uri

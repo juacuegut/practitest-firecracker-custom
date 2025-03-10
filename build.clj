@@ -8,9 +8,10 @@
 ; Create new tag v<Major>.<Minor> when starting working on new major/minor version branch
 (def major-version 2)
 (def minor-version 2)
+(def path-version 13)
+(def build-number 1)
 
-(def commits-count (b/git-process {:git-args (format "rev-list v%s.%s..HEAD --count" major-version minor-version)}))
-(def version (format "%s.%s.%s" major-version minor-version commits-count))
+(def version (format "%s.%s.%s.%s" major-version minor-version path-version build-number))
 (def class-dir "target/classes")
 (def uber-file (format "target/%s-%s-standalone.jar" (name lib) version))
 
