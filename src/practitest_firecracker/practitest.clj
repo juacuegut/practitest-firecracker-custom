@@ -96,26 +96,22 @@
 (defn create-or-update-tests [[all-tests org-xml-tests testset-id-to-name ts-id-test-name-num-instances] client {:keys [project-id display-action-logs display-run-time use-test-step] :as options} start-time]
   (let [new-tests (into [] (eval/group-test-ids (vals all-tests) options))
         results (doall
-                  (flatten
-                    (into []
-                          (pmap
-                            (fn [new-tests-part]
-                              (api/ll-find-tests-by-id client [project-id display-action-logs] new-tests-part)) (partition-all 20 new-tests)))))
+                 (flatten
+                  (into []
+                        (pmap
+                         (fn [new-tests-part]
+                           (api/ll-find-tests-by-id client [project-id display-action-logs] (vec new-tests-part))) (partition-all 20 new-tests)))))
 
         xml-tests (doall (for [res results]
                            [(get-in res [:query :id]) (get all-tests (get-in res [:query :id])) (first (:data (:tests res)))]))
 
-        test-ids (->> results
-                      (map #(get-in % [:tests :data]))
-                      (flatten)
-                      (map :id)
-                      (map #(Integer/parseInt %)))
+        test-ids (map :id new-tests) ;; Utilizar directamente los IDs de new-tests
 
         test-cases (->> test-ids
                         (partition-all 20)
                         (pmap
-                          (fn [test-ids]
-                            (api/ll-test-steps client project-id (string/join "," test-ids))))
+                         (fn [test-ids]
+                           (api/ll-test-steps client project-id (string/join "," test-ids))))
                         (into [])
                         (flatten))
 
@@ -123,6 +119,7 @@
                                (map (fn [[grp-key values]]
                                       {grp-key (map #(translate-step-attributes (:attributes %)) values)})
                                     (group-by (fn [x] (:test-id (:attributes x))) test-cases)))
+
         log (if display-run-time (print-run-time "Time - after find all tests: %d:%d:%d" start-time) nil)
         nil-tests (filter #(nil? (last %)) xml-tests)
         old-tests (filter #(not (nil? (last %))) xml-tests)
@@ -144,7 +141,6 @@
                   old-tests))
       (when display-run-time (print-run-time "Time - after update tests: %d:%d:%d" start-time)))
     [new-all-tests org-xml-tests testset-id-to-name ts-id-test-name-num-instances test-id-to-cases tests-after]))
-
 ;; API returns mangled parameters because of rails key transformation, so for lookup purposes
 ;; we're trying to mimic what rails does to parameter keys
 (defn- transform-rails-key [key]
