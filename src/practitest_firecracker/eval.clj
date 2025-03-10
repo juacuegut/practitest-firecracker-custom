@@ -42,7 +42,7 @@
      ;; No steps for BDD
      []]
     ;; Usual logic
-    [{:name (sf-test-suite->pt-test-name options test-suite)}
+    [{:id (Integer/parseInt (:id test-suite))} ;; Usar el ID en lugar del nombre
      (map (partial sf-test-case->step-def options) (:test-cases test-suite))]))
 
 (defn group-test-names [tests options]
