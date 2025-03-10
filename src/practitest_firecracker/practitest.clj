@@ -24,18 +24,17 @@
         {(:id testset) (:test-list sf-test-suites)}))))
 
 (defn group-tests [testsets _ options]
-  (let [ts-id-test-name-num-instances (into {} (map (fn [[k v]]
-                                                      {k
-                                                       (frequencies (map (fn [test] (eval/sf-test-suite->pt-test-name options test)) v))})
-                                                    (into {} testsets)))
-        testset-id-to-name (map (fn [[k v]]
-                                  {k (set (map
-                                            (fn [test] (eval/sf-test-suite->pt-test-name options test)) v))})
-                                (into {} testsets))
+  (let [ts-id-test-id-num-instances (into {} (map (fn [[k v]]
+                                                    {k
+                                                     (frequencies (map (fn [test] (:id test)) v))})
+                                                  (into {} testsets)))
+        testset-id-to-id (map (fn [[k v]]
+                                {k (set (map :id v))})
+                              (into {} testsets))
         xml-tests (flatten (map val (into {} testsets)))
         all-tests (doall (into {} (for [test xml-tests]
-                                    {(eval/sf-test-suite->pt-test-name options test) test})))]
-    [all-tests xml-tests testset-id-to-name ts-id-test-name-num-instances]))
+                                    {(:id test) test})))]
+    [all-tests xml-tests testset-id-to-id ts-id-test-id-num-instances]))
 
 (defn value-get [existing-cases xml-cases]
   (conj (into [] existing-cases) (into [] xml-cases)))
@@ -93,25 +92,29 @@
    :position          (:position attributes)
    :attributes attributes})
 
-(defn create-or-update-tests [[all-tests org-xml-tests testset-id-to-name ts-id-test-name-num-instances] client {:keys [project-id display-action-logs display-run-time use-test-step] :as options} start-time]
+(defn create-or-update-tests [[all-tests org-xml-tests testset-id-to-id ts-id-test-id-num-instances] client {:keys [project-id display-action-logs display-run-time use-test-step] :as options} start-time]
   (let [new-tests (into [] (eval/group-test-ids (vals all-tests) options))
         results (doall
-                 (flatten
-                  (into []
-                        (pmap
-                         (fn [new-tests-part]
-                           (api/ll-find-tests-by-id client [project-id display-action-logs] (vec new-tests-part))) (partition-all 20 new-tests)))))
+                  (flatten
+                    (into []
+                          (pmap
+                            (fn [new-tests-part]
+                              (api/ll-find-tests client [project-id display-action-logs] new-tests-part)) (partition-all 20 new-tests)))))
 
         xml-tests (doall (for [res results]
-                           [(get-in res [:query :id]) (get all-tests (get-in res [:query :id])) (first (:data (:tests res)))]))
+                           [(:id (:query res)) (get all-tests (:id (:query res))) (first (:data (:tests res)))]))
 
-        test-ids (map :id new-tests) ;; Utilizar directamente los IDs de new-tests
+        test-ids (->> results
+                      (map #(get-in % [:tests :data]))
+                      (flatten)
+                      (map :id)
+                      (map #(Integer/parseInt %)))
 
         test-cases (->> test-ids
                         (partition-all 20)
                         (pmap
-                         (fn [test-ids]
-                           (api/ll-test-steps client project-id (string/join "," test-ids))))
+                          (fn [test-ids]
+                            (api/ll-test-steps client project-id (string/join "," test-ids))))
                         (into [])
                         (flatten))
 
@@ -140,7 +143,8 @@
                       (eval/update-sf-test client options test-suite test)))
                   old-tests))
       (when display-run-time (print-run-time "Time - after update tests: %d:%d:%d" start-time)))
-    [new-all-tests org-xml-tests testset-id-to-name ts-id-test-name-num-instances test-id-to-cases tests-after]))
+    [new-all-tests org-xml-tests testset-id-to-id ts-id-test-id-num-instances test-id-to-cases tests-after]))
+
 ;; API returns mangled parameters because of rails key transformation, so for lookup purposes
 ;; we're trying to mimic what rails does to parameter keys
 (defn- transform-rails-key [key]
@@ -170,14 +174,14 @@
                             (query-dsl/read-query pt-instance-params))
                           #"\|"))))))))
 
-(defn create-instances [[all-tests org-xml-tests testset-id-to-name ts-id-test-name-num-instances test-id-to-cases tests-after]
+(defn create-instances [[all-tests org-xml-tests testset-id-to-id ts-id-test-id-num-instances test-id-to-cases tests-after]
                         client
                         {:keys [project-id display-action-logs display-run-time pt-instance-params] :as options} start-time]
   (when display-action-logs (log/infof "pt-instance-params: %s" pt-instance-params))
   (let [all-test-ids (map (fn [test] (:id (last test))) all-tests)
-        testname-test (into {} (map (fn [test] {(first test) test}) all-tests))
+        testid-test (into {} (map (fn [test] {(first test) test}) all-tests))
 
-        test-id-testname (into {} (map (fn [test] {(query-dsl/parse-int (:id (last test))) (first test)}) all-tests))
+        test-id-testid (into {} (map (fn [test] {(query-dsl/parse-int (:id (last test))) (first test)}) all-tests))
         testid-params (when (not-empty pt-instance-params)
                         (into {}
                               (map
@@ -189,7 +193,7 @@
 
         log (when display-action-logs (log/infof "testid-params: %s" testid-params))
 
-        testset-ids (map (fn [testset] (first (first testset))) testset-id-to-name)
+        testset-ids (map (fn [testset] (first (first testset))) testset-id-to-id)
 
         ts-ids (string/join "," testset-ids)
 
@@ -200,27 +204,27 @@
                                                       (string/join "," test-ids-bucket)))
                           (partition-all max-test-ids-bucket-size all-test-ids))
 
-        testname-to-params (when (not-empty pt-instance-params)
-                             (into {}
-                                   (map
-                                     (fn [[key tests]]
-                                       {key
-                                        (into []
-                                              (remove nil?
-                                                      (map
-                                                        (fn [test]
-                                                          (get-parameters-map test pt-instance-params)) tests)))})
-                                     (group-by
-                                       #(eval/sf-test-suite->pt-test-name options %)
-                                       org-xml-tests))))
+        testid-to-params (when (not-empty pt-instance-params)
+                           (into {}
+                                 (map
+                                   (fn [[key tests]]
+                                     {key
+                                      (into []
+                                            (remove nil?
+                                                    (map
+                                                      (fn [test]
+                                                        (get-parameters-map test pt-instance-params)) tests)))})
+                                   (group-by
+                                     #(eval/sf-test-suite->pt-test-id options %)
+                                     org-xml-tests))))
 
-        test-name-params (when
+        test-id-params (when
                          (not-empty pt-instance-params)
                          (into
                            #{}
                            (map
                              (fn [test]
-                               [(eval/sf-test-suite->pt-test-name options test)
+                               [(eval/sf-test-suite->pt-test-id options test)
                                 (get-parameters-map test pt-instance-params)])
                              org-xml-tests)))
 
@@ -229,7 +233,7 @@
                              (fn [instance]
                                (let
                                  [{:keys [name bdd-parameters parameters]} (:attributes instance)
-                                  obj-test (get testname-test name)
+                                  obj-test (get testid-test name)
                                   test-type (:test-type (:attributes (last obj-test)))
                                   params (if (= test-type "BDDTest") bdd-parameters parameters)
                                   params (if (map? params)
@@ -237,7 +241,7 @@
                                            ;; Vector case - not sure when it happens, convert to map
                                            (zipmap (iterate inc 1) params))]
                                  (if (seq params)
-                                   (contains? test-name-params [name params])
+                                   (contains? test-id-params [name params])
                                    ;; Do not filter if no parameters is set
                                    true)))
                              instances)
@@ -247,11 +251,11 @@
                                            {(first (first testset-id-name))
                                             (into {}
                                                   (map
-                                                    (fn [test-name]
-                                                      {(read-string (:id (last (get testname-test test-name))))
-                                                       (get (get ts-id-test-name-num-instances (first (first testset-id-name))) test-name)})
+                                                    (fn [test-id]
+                                                      {(read-string (:id (last (get testid-test test-id))))
+                                                       (get (get ts-id-test-id-num-instances (first (first testset-id-name))) test-id)})
                                                     (last (last testset-id-name))))})
-                                         testset-id-to-name))
+                                         testset-id-to-id))
         ts-id-instances (group-by (fn [inst] (get-in inst [:attributes :set-id])) filter-instances)
 
         missing-instances (into {}
@@ -278,18 +282,18 @@
                                         (get-in inst [:attributes :name]))
                                       filter-instances))))
 
-        new-testname-to-params (into {}
-                                     (map
-                                       (fn [test-name]
-                                         {test-name
-                                          (into []
-                                                (difference
-                                                  (set (get testname-to-params test-name))
-                                                  (set (get existing-instance test-name))))})
-                                       (keys testname-to-params)))
-        tests-with-steps (update-steps all-tests test-id-to-cases testname-to-params options)
+        new-testid-to-params (into {}
+                                   (map
+                                     (fn [test-id]
+                                       {test-id
+                                        (into []
+                                              (difference
+                                                (set (get testid-to-params test-id))
+                                                (set (get existing-instance test-id))))})
+                                     (keys testid-to-params)))
+        tests-with-steps (update-steps all-tests test-id-to-cases testid-to-params options)
         all-tests (concat tests-after tests-with-steps)
-        make-instances (flatten (api/make-instances missing-instances new-testname-to-params test-id-testname))
+        make-instances (flatten (api/make-instances missing-instances new-testid-to-params test-id-testid))
         test-by-id (group-by (fn [test] (read-string (:id (last test)))) all-tests)
         new-intstances (flatten (for [instances-part (partition-all 100 (shuffle make-instances))]
                                   (api/ll-create-instances client [project-id display-action-logs] instances-part)))
@@ -300,13 +304,13 @@
 
         group-xml-tests (group-by
                           (fn [test]
-                            [(eval/sf-test-suite->pt-test-name options test)
+                            [(eval/sf-test-suite->pt-test-id options test)
                              (when pt-instance-params (get-parameters-map test pt-instance-params))])
                           org-xml-tests)
 
         instance-to-ts-test (group-by (fn [inst] [(:set-id (:attributes inst)) (:test-id (:attributes inst))]) all-intstances)]
     (when display-run-time (print-run-time "Time - after create instances: %d:%d:%d" start-time))
-    [test-by-id instance-to-ts-test testname-to-params group-xml-tests]))
+    [test-by-id instance-to-ts-test testid-to-params group-xml-tests]))
 
 (defn make-runs [[test-by-id instance-to-ts-test test-name-to-params group-xml-tests] client {:keys [display-action-logs] :as options} start-time]
   (when display-action-logs (log/infof "make-runs"))

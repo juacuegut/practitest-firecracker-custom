@@ -261,7 +261,7 @@
 (defn group-testcase-data [data {:keys [test-case-as-pt-test-step
                                         detect-bdd-steps]
                                  :as options}]
-  (let [grouping-func (if (contains? (:attrs (first data)) :classname)
+  (let [grouping-func (if (contains? (:attrs (first data)) :id)
                         group-by-classname
                         group-by-name)]
     (if test-case-as-pt-test-step

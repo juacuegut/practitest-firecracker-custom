@@ -14,11 +14,11 @@
             additional-fields))
 
 (defn sf-test-suite->pt-test-name [options suite]
-  ;; Special case for automatically detected BDD scenarios - will use outline name instead of generated one
+  ;; Special case for automatically detected BDD scenarios - will use outline ID instead of generated one
   (if-let [scenario (:gherkin-scenario suite)]
-    (:name scenario)
-    (let [test-name (eval-query suite (:pt-test-name options))]
-      (if (string/blank? test-name) "UNNAMED" test-name))))
+    (:id scenario) ;; Usar el ID del escenario BDD
+    (let [test-id (:id suite)] ;; Obtener el ID del test suite
+      (if (string/blank? test-id) "UNNAMED" test-id)))) ;; Devolver "UNNAMED" si el ID está en blanco
 
 (defn sf-test-case->pt-step-description [options test-case]
   (let [step-name (eval-query test-case (:pt-test-step-description options))]
@@ -42,7 +42,7 @@
      ;; No steps for BDD
      []]
     ;; Usual logic
-    [{:id (Integer/parseInt (:id test-suite))} ;; Usar el ID en lugar del nombre
+    [{:id (Integer/parseInt (:id test-suite))}
      (map (partial sf-test-case->step-def options) (:test-cases test-suite))]))
 
 (defn group-test-names [tests options]

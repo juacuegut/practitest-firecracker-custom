@@ -168,7 +168,7 @@
 (defn ll-find-test [{:keys [base-uri credentials max-api-rate-throttler]} [project-id display-action-logs] id]
   (when display-action-logs (log/infof "searching for test ID:%s" id))
   (let [uri (build-uri base-uri list-tests-uri project-id)]
-    ;; in case there are more than one test with this name, return the first one
+    ;; in case there are more than one test with this id, return the first one
     (first
       (api-call {:credentials  credentials
                  :uri          uri
